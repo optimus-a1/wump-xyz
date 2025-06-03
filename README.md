@@ -1,6 +1,6 @@
 # WUMP Daily Auto Check-in
 
-自动化签到脚本，适用于 [https://wump.xyz](https://wump.xyz) 平台，欢迎大家用我的推荐进行注册 https://wump.xyz/join?ref=893880097801646180 进行注册支持多账号、access_token 自动刷新、每日执行一次签到。
+自动化签到脚本，适用于 [https://wump.xyz](https://wump.xyz) 平台，欢迎大家用我的推荐进行注册 https://wump.xyz/join?ref=893880097801646180 进行注册，脚本支持多账号、access_token 自动刷新、每日执行一次签到。
 
 ---
 
@@ -14,9 +14,21 @@
 ---
 
 ## 🧩 依赖安装
+查年是否有这婚前协议python
 
-请先安装 Python 第三方库：
+```bash
+python3 --version
+pip3 --version
+```
+看有没有输出版本
 
+没有需进行安装python
+```bash
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv build-essential
+```
+
+
+安装 Python 第三方库：
 ```bash
 pip install requests pyjwt
 ```
@@ -60,6 +72,11 @@ pip install requests pyjwt
 
 你可以通过 Chrome 浏览器打开开发者工具（F12） → Network 面板，刷新页面并完成一次登录，然后查看如下信息：
 
+![image](https://github.com/user-attachments/assets/cd840afb-e069-4c41-b043-4b5fddd52d09)
+
+![image](https://github.com/user-attachments/assets/ab0efe19-4ba5-4b0c-9a7e-1401ef606677)
+
+
 ### ✅ `API_KEY`
 
 1. 任意接口请求中（如 `/rest/v1/user_tasks`），请求头中的：
@@ -87,7 +104,7 @@ pip install requests pyjwt
 ## 🚀 启动脚本
 
 ```bash
-python3 wump_daily
+python3 wump_daily.py
 ```
 
 脚本将常驻运行，每 24 小时自动执行一次签到，并跳过已签到账号。
@@ -101,7 +118,7 @@ python3 wump_daily
 - ✅ 自动判断 token 过期
 - ✅ 自动提取 refresh_token 并刷新
 - ✅ 自动更新 config.json 中的 token
-- ✅ 支持无 crontab 情况下常驻运行
+
 
 ---
 
@@ -110,6 +127,9 @@ python3 wump_daily
 - 请确保每个账号 `ACCESS_TOKEN` 有效（首次手动获取即可）
 - 每次脚本运行将持续运行（建议配合 `screen` 或 `tmux`）
 
+screen -S wump
+
+python3 wump_daily.py
 ---
 
 ## 👨‍💻 作者
