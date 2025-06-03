@@ -90,6 +90,8 @@ pip install requests pyjwt
    ```http
    apikey: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
    ```
+   ![image](https://github.com/user-attachments/assets/47886d1c-7093-4c9f-bc3b-e980bc18f197)
+
 
 ### ✅ `ACCESS_TOKEN`
 
@@ -97,6 +99,8 @@ pip install requests pyjwt
    ```http
    Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
    ```
+   ![image](https://github.com/user-attachments/assets/73516726-18ac-4218-a860-4619eb085c06)
+
 
 ### ✅ `USER_ID`
 
@@ -105,6 +109,7 @@ pip install requests pyjwt
    /rest/v1/users?id=eq.c108a0af-2f03-4e05-b01b-30c85beb4f6f
    ```
    其中 `c108a0af-2f03-4e05-b01b-30c85beb4f6f` 就是你的 `USER_ID`。
+![image](https://github.com/user-attachments/assets/41ef715c-6fb8-4805-83b6-de8a3adc5227)
 
 ---
 
