@@ -1,6 +1,6 @@
 # WUMP Daily Auto Check-in
 
-自动化签到脚本，适用于 [https://wump.xyz](https://wump.xyz) 平台，支持多账号、access_token 自动刷新、每日执行一次签到。
+自动化签到脚本，适用于 [https://wump.xyz](https://wump.xyz) 平台，欢迎大家用我的推荐进行注册https://wump.xyz/join?ref=893880097801646180进行注册支持多账号、access_token 自动刷新、每日执行一次签到。
 
 ---
 
