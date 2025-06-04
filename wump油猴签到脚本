@@ -1,0 +1,463 @@
+// ==UserScript==
+// @name         WUMP 自动签到助手
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  自动完成 WUMP.XYZ 每日签到任务
+// @author       You
+// @match        https://wump.xyz/*
+// @match        https://*.wump.xyz/*
+// @grant        none
+// @run-at       document-end
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // 配置选项
+    const CONFIG = {
+        AUTO_CLAIM: true,           // 是否自动领取奖励
+        CHECK_INTERVAL: 3000,       // 检查间隔（毫秒）
+        MAX_RETRIES: 5,             // 最大重试次数
+        SHOW_LOGS: true,            // 是否显示日志
+        AUTO_REFRESH: true,         // 任务完成后是否自动刷新检查新任务
+        DELAY_BETWEEN_TASKS: 2000,  // 任务间延迟（毫秒）
+    };
+
+    // 日志函数
+    function log(message, type = 'info') {
+        if (!CONFIG.SHOW_LOGS) return;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        const prefix = '[WUMP Auto]';
+        const styles = {
+            info: 'color: #1976d2; font-weight: bold;',
+            success: 'color: #388e3c; font-weight: bold;',
+            warning: 'color: #f57c00; font-weight: bold;',
+            error: 'color: #d32f2f; font-weight: bold;'
+        };
+        
+        console.log(`%c${prefix} [${timestamp}] ${message}`, styles[type] || styles.info);
+    }
+
+    // 显示通知
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateX(100%);
+        `;
+        
+        const colors = {
+            info: '#1976d2',
+            success: '#388e3c', 
+            warning: '#f57c00',
+            error: '#d32f2f'
+        };
+        
+        notification.style.backgroundColor = colors[type] || colors.info;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        // 显示动画
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // 3秒后自动消失
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    // 等待元素出现
+    function waitForElement(selector, timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
+                return;
+            }
+
+            const observer = new MutationObserver((mutations, obs) => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    obs.disconnect();
+                    resolve(element);
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                reject(new Error(`元素 ${selector} 在 ${timeout}ms 内未找到`));
+            }, timeout);
+        });
+    }
+
+    // 延迟函数
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // 查找所有可领取的任务
+    function findClaimableTask() {
+        // 查找所有可能的按钮选择器
+        const selectors = [
+            'button:contains("Claim")',
+            'button[data-testid="claim-button"]',
+            '.claim-button',
+            '[data-claim="true"]',
+            'button.claim',
+            // 更通用的选择器
+            'button',
+            '[role="button"]'
+        ];
+
+        for (const selector of selectors) {
+            try {
+                let buttons;
+                
+                if (selector.includes(':contains')) {
+                    // 手动实现 :contains 选择器
+                    buttons = Array.from(document.querySelectorAll('button')).filter(btn => 
+                        btn.textContent.toLowerCase().includes('claim')
+                    );
+                } else {
+                    buttons = document.querySelectorAll(selector);
+                }
+
+                for (const button of buttons) {
+                    const text = button.textContent.toLowerCase();
+                    const isVisible = button.offsetParent !== null;
+                    const isEnabled = !button.disabled;
+                    
+                    if (isVisible && isEnabled && 
+                        (text.includes('claim') || text.includes('领取') || text.includes('获取'))) {
+                        return button;
+                    }
+                }
+            } catch (e) {
+                // 忽略选择器错误，继续尝试下一个
+            }
+        }
+
+        return null;
+    }
+
+    // 查找每日签到按钮
+    function findDailyCheckInButton() {
+        const selectors = [
+            // 根据你提供的截图，寻找 "Daily Points" 相关的按钮
+            'button:contains("Daily")',
+            '.daily-button',
+            '[data-task-type="daily"]',
+            // 通用的任务相关按钮
+            '.task-button',
+            '.reward-button'
+        ];
+
+        for (const selector of selectors) {
+            try {
+                let buttons;
+                
+                if (selector.includes(':contains')) {
+                    buttons = Array.from(document.querySelectorAll('button')).filter(btn => 
+                        btn.textContent.toLowerCase().includes('daily') ||
+                        btn.textContent.toLowerCase().includes('points')
+                    );
+                } else {
+                    buttons = document.querySelectorAll(selector);
+                }
+
+                for (const button of buttons) {
+                    const text = button.textContent.toLowerCase();
+                    const isVisible = button.offsetParent !== null;
+                    const isEnabled = !button.disabled;
+                    
+                    if (isVisible && isEnabled && 
+                        (text.includes('daily') || text.includes('每日') || text.includes('points'))) {
+                        return button;
+                    }
+                }
+            } catch (e) {
+                // 忽略错误
+            }
+        }
+
+        return null;
+    }
+
+    // 执行签到任务
+    async function performDailyCheckIn() {
+        try {
+            log('开始查找每日签到任务...');
+
+            // 等待页面加载完成
+            await delay(2000);
+
+            // 首先查找可直接领取的按钮
+            let claimButton = findClaimableTask();
+            
+            if (claimButton) {
+                log('找到可领取的任务按钮，准备点击...');
+                
+                // 滚动到按钮位置
+                claimButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await delay(1000);
+                
+                // 点击按钮
+                claimButton.click();
+                log('已点击领取按钮', 'success');
+                showNotification('✅ 每日任务已完成！', 'success');
+                
+                // 等待响应
+                await delay(2000);
+                
+                // 检查是否还有其他可领取的任务
+                await delay(CONFIG.DELAY_BETWEEN_TASKS);
+                return await checkForMoreTasks();
+                
+            } else {
+                log('未找到可领取的按钮，查找每日签到任务...');
+                
+                const dailyButton = findDailyCheckInButton();
+                if (dailyButton) {
+                    log('找到每日签到按钮，准备点击...');
+                    
+                    dailyButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await delay(1000);
+                    
+                    dailyButton.click();
+                    log('已点击每日签到按钮', 'success');
+                    showNotification('✅ 每日签到已完成！', 'success');
+                    
+                    await delay(CONFIG.DELAY_BETWEEN_TASKS);
+                    return await checkForMoreTasks();
+                } else {
+                    log('未找到任何可操作的任务按钮', 'warning');
+                    showNotification('⚠️ 未找到可操作的任务', 'warning');
+                    return false;
+                }
+            }
+            
+        } catch (error) {
+            log(`执行签到任务时出错: ${error.message}`, 'error');
+            showNotification('❌ 签到失败：' + error.message, 'error');
+            return false;
+        }
+    }
+
+    // 检查是否还有更多任务
+    async function checkForMoreTasks() {
+        await delay(2000);
+        
+        const moreClaimButtons = document.querySelectorAll('button').length;
+        let foundMore = false;
+        
+        for (let i = 0; i < 3; i++) { // 最多检查3次
+            const claimButton = findClaimableTask();
+            if (claimButton) {
+                log(`找到额外的可领取任务 ${i + 1}，继续处理...`);
+                
+                claimButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await delay(1000);
+                
+                claimButton.click();
+                foundMore = true;
+                
+                await delay(CONFIG.DELAY_BETWEEN_TASKS);
+            } else {
+                break;
+            }
+        }
+        
+        if (foundMore) {
+            showNotification('✅ 所有可用任务已完成！', 'success');
+        }
+        
+        return foundMore;
+    }
+
+    // 创建控制面板
+    function createControlPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'wump-auto-panel';
+        panel.style.cssText = `
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 9999;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            min-width: 200px;
+        `;
+
+        panel.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 10px; text-align: center;">
+                🤖 WUMP 自动助手
+            </div>
+            <button id="manual-claim" style="
+                width: 100%;
+                padding: 8px;
+                margin: 5px 0;
+                border: none;
+                border-radius: 5px;
+                background: rgba(255,255,255,0.2);
+                color: white;
+                cursor: pointer;
+                font-weight: bold;
+                transition: all 0.3s ease;
+            ">🎯 手动执行签到</button>
+            <button id="toggle-auto" style="
+                width: 100%;
+                padding: 8px;
+                margin: 5px 0;
+                border: none;
+                border-radius: 5px;
+                background: rgba(255,255,255,0.2);
+                color: white;
+                cursor: pointer;
+                font-weight: bold;
+                transition: all 0.3s ease;
+            ">⚡ 开启自动模式</button>
+            <div id="status" style="
+                margin-top: 10px;
+                padding: 8px;
+                background: rgba(0,0,0,0.2);
+                border-radius: 5px;
+                text-align: center;
+                font-size: 11px;
+            ">准备就绪</div>
+        `;
+
+        document.body.appendChild(panel);
+
+        // 按钮事件
+        document.getElementById('manual-claim').addEventListener('click', async () => {
+            document.getElementById('status').textContent = '执行中...';
+            const success = await performDailyCheckIn();
+            document.getElementById('status').textContent = success ? '执行成功' : '执行失败';
+        });
+
+        let autoMode = false;
+        let autoInterval;
+
+        document.getElementById('toggle-auto').addEventListener('click', () => {
+            autoMode = !autoMode;
+            const toggleBtn = document.getElementById('toggle-auto');
+            const statusDiv = document.getElementById('status');
+
+            if (autoMode) {
+                toggleBtn.textContent = '⏹️ 关闭自动模式';
+                toggleBtn.style.background = 'rgba(255,100,100,0.8)';
+                statusDiv.textContent = '自动模式运行中...';
+                
+                // 立即执行一次
+                performDailyCheckIn();
+                
+                // 设置定时执行
+                autoInterval = setInterval(async () => {
+                    log('自动模式：检查可领取任务...');
+                    await performDailyCheckIn();
+                }, CONFIG.CHECK_INTERVAL * 10); // 每30秒检查一次
+                
+            } else {
+                toggleBtn.textContent = '⚡ 开启自动模式';
+                toggleBtn.style.background = 'rgba(255,255,255,0.2)';
+                statusDiv.textContent = '自动模式已关闭';
+                
+                if (autoInterval) {
+                    clearInterval(autoInterval);
+                }
+            }
+        });
+
+        // 让面板可拖拽
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+
+        panel.addEventListener('mousedown', (e) => {
+            if (e.target === panel || e.target.parentElement === panel) {
+                isDragging = true;
+                initialX = e.clientX - panel.offsetLeft;
+                initialY = e.clientY - panel.offsetTop;
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                panel.style.left = currentX + 'px';
+                panel.style.top = currentY + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+    }
+
+    // 主函数
+    async function main() {
+        log('WUMP 自动签到助手已启动');
+        
+        // 等待页面加载
+        await delay(3000);
+        
+        // 创建控制面板
+        createControlPanel();
+        
+        // 如果配置为自动执行，则立即开始
+        if (CONFIG.AUTO_CLAIM) {
+            log('自动模式已启用，将在页面加载后执行签到...');
+            await delay(2000);
+            await performDailyCheckIn();
+        }
+        
+        showNotification('🤖 WUMP 自动助手已启动', 'info');
+    }
+
+    // 页面加载完成后启动
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', main);
+    } else {
+        main();
+    }
+
+})();
