@@ -1,3 +1,6 @@
+由于access_token有时效性，本自脚本不能用，重写一个个油猴脚本。
+
+
 # WUMP Daily Auto Check-in
 
 自动化签到脚本，适用于 [https://wump.xyz](https://wump.xyz) 平台，欢迎大家用我的推荐进行注册 https://wump.xyz/join?ref=893880097801646180 进行注册，脚本支持多账号、access_token 自动刷新、每日执行一次签到。
